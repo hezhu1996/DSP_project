@@ -4,10 +4,12 @@ import wave
 from scipy.io import wavfile
 from scipy import signal
 
-L=5
+
 
 X=np.array([2,3,4,5,6,7,8,9,10,11,12,13,14])
-H=np.array([1,2,1])
+H=np.array([1,2,1])  # M
+L=5
+M = len(H)
 
 # find the number of zero padding
 if len(X) % L !=0:
@@ -25,7 +27,23 @@ row = len(X)//L
 # reshape array every L values, row*L matrics
 X = X.reshape(row,L)
 
-print(X[1,:])
+# 错位相加最后M-1个点
+
+print(X[1,-(M-1):])
+
+
+
+import numpy as np
+Xn = np.array([1,1,1,1,0,0]) # L=4
+Hn = np.array([1,2,3,0,0,0]) # P=3          L+P-1=6
+
+Xk = np.fft.fft(Xn)
+Hk = np.fft.fft(Hn)
+Yk = np.multiply(Xk,Hk)
+
+Yn = np.fft.ifft(Yk)               # yn=6
+
+print(abs(Yn))
 
 
 
