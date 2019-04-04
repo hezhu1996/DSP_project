@@ -1,0 +1,153 @@
+from scipy.io import loadmat
+import numpy as np
+import wave
+from scipy.io import wavfile
+from scipy import signal
+
+
+# Read the audio file
+wavepath = "nokia.wav"
+fs, audioIn = wavfile.read(wavepath)
+audioIn = np.array(audioIn)
+audioIn = audioIn / 32767
+
+# get the length of audio file
+duration = len(audioIn)
+
+# segment into N degrees     -90 ~ 90 -> 180/5 = 36 degrees per 5degree
+points_number = 36
+
+# the number of padding zeros
+remainder = duration % points_number
+
+if remainder > 0:
+    padding_zero = points_number - remainder
+
+    audioIn = np.hstack((audioIn, np.zeros(padding_zero)))
+
+# to calculate the new audio length and a step length for each segment
+step = len(audioIn)//points_number
+
+# Rayleigh's head shadow
+
+# the radius of head 17/2 = 8cm
+a = 8.5
+
+# speed of sound: 340m/s
+c= 34000
+
+
+alpha = []   #length = 36
+Tr = []      #length = 36
+Tl = []      #length = 36
+t = (1/2)*(a/c)
+
+# create theta from -90 to 90 and calculate alpha which has 36 values
+for theta in range(-90,90,5):
+    al = (1 / 2) * (1 + theta)
+    alpha.append (al)
+
+# calculate Tr Tl which has 36 values
+for i in range(len(alpha)):
+    T_right = (1 - alpha[i]) * t
+    Tr.append(T_right)
+
+    T_left = alpha[i] * t
+    Tl.append(T_left)
+
+N=100        #sample points
+w=[]
+
+for k in range(-N//2,N//2):
+    w1 = (np.pi * 2 * k / N) * 44100
+    w.append(w1)
+
+Hr = np.zeros((points_number,N))
+Hl = np.zeros((points_number,N))
+
+for i in range(points_number):
+    H_right = np.zeros(0)
+    H_left = np.zeros(0)
+
+    for j in range(N):
+
+        #create right hrir signal
+        H_right = np.append(H_right,((1+(1j*2*alpha[i]*w[j]*t))/(1+1j*w[j]*t))*(np.e**(-1j*w[j]*Tr[i])))
+        H_right = np.fft.ifft(H_right)
+
+        #create left hrir signal
+        H_left = np.append(H_left,((1+(1j*2*(1-alpha[i])*w[i]*t))/(1+1j*w[j]*t))*(np.e**(-1j*w[j]*Tl[i])))
+        H_left = np.fft.ifft(H_left)
+
+    # H[k] after doing the ifft
+    Hr[i,:] = H_right
+    Hl[i,:] = H_left
+
+Hr = Hr.reshape(-1)
+Hl = Hl.reshape(-1)
+length = len(Hr)
+# shift the ifft data
+# for i in range(points_number):  #36
+#     for j in range(N//2):       #100/2=50
+#         temp_right = Hr[i, 0]
+#         Hr_temp = Hr[i,1:]
+#         Hr_temp = np.append(Hr_temp,temp_right)
+#         Hr[i,:] = Hr_temp
+#
+#         temp_left = Hl[i,0]
+#         Hl_temp = Hl[i,1:]
+#         Hl_temp = np.append(Hl_temp,temp_left)
+#         Hl[i,:] = Hl_temp
+
+# np.savetxt('Part2_OUT_1.csv',Hr,delimiter=",")
+for i in range(length//2):
+    temp = Hr[0]
+    Hr = Hr[1:]
+    Hr = np.append(Hr,temp)
+
+
+# np.savetxt('Part2_OUT_2.csv',Hr,delimiter=",")
+Hr = Hr.reshape(points_number,N)
+Hl = Hl.reshape(points_number,N)
+
+# init segment piece
+segment_L = np.zeros((points_number,step+N-1))
+segment_R = np.zeros((points_number,step+N-1))
+
+
+# do the convolution in time domain
+for i in range(points_number):
+    # L = signal.lfilter(Hl[i,:],1,audioIn[step*i:step*(i+1)])
+    # R = signal.lfilter(Hr[i,:],1,audioIn[step*i:step*(i+1)])
+
+    L = np.convolve(Hl[i,:],audioIn[step*i:step*(i+1)])
+    R = np.convolve(Hr[i,:],audioIn[step*i:step*(i+1)])
+
+    segment_L[i,:] = L
+    segment_R[i,:] = R
+
+
+out_L = segment_L.reshape(-1)
+out_R = segment_R.reshape(-1)
+out = np.vstack((out_L,out_R))
+out = out.T
+
+wavfile.write('Hrir_Part2_Out.wav',44100,out)
+
+
+# print("alpha:",alpha)
+# print("===================================")
+# print("Tr:",Tr)
+# print("===================================")
+# print("Tl:",Tl)
+# print("===================================")
+# print("Hr:",Hr.shape)
+# print("===================================")
+# print("Hl:",Hl.shape)
+# print("===================================")
+# print("segment_R:",segment_R.shape)
+# print("===================================")
+# print("segment_L:",segment_L.shape)
+# print("===================================")
+# print("out:",out.shape)
+# print("===================================")
