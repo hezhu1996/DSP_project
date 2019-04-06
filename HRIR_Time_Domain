@@ -8,7 +8,7 @@ def load_CIPIC_HRIP(left_or_right):
     np.set_printoptions(threshold=1e6)
     # np.set_printoptions(suppress=True,precision=4)
 
-    m = loadmat("D:\File\\UOttawa\DSP\Project\Matlab_HRTF\HRTF/hrir_final.mat")
+    m = loadmat("hrir_final.mat")
     hrir_l = m["hrir_l"]
     hrir_r = m["hrir_r"]
 
@@ -22,7 +22,7 @@ def load_CIPIC_HRIP(left_or_right):
 def audio_with_brir(brir):
 
     # read audio file
-    wavepath= "D:\File\\UOttawa\DSP\Final_Project\Final_Project\Matlab-master\HRTF\nokia.wav"
+    wavepath= "nokia.wav"
     fs, audioIn = wavfile.read(wavepath)
     audioIn = np.array(audioIn)
     audioIn = audioIn / 32767
@@ -30,19 +30,21 @@ def audio_with_brir(brir):
     # get the length of audio file
     duration = len(audioIn)
 
-    #points_number
+    # points_number
     # brir= np.array(brir)
-    points_number = brir.shape[1]/2   #之输出列数
+    points_number = brir.shape[1]//2   #之输出列数
 
     #the number of padding zeros
-    remainder = duration%points_number
+    remainder = duration % points_number
 
     if remainder>0:
         padding_zero = points_number-remainder
-        audioIn = np.array([audioIn,np.zeros(3)])
+
+        audioIn = np.hstack((audioIn , np.zeros(padding_zero)))
 
     # calcualte the new audio length and a step length for each segment
-    step = len(audioIn)/points_number
+    step = len(audioIn)//points_number
+    print(step)
 
     # length for window size
     window_N = 512
@@ -50,13 +52,38 @@ def audio_with_brir(brir):
 
     # pass filter
     lowpass = signal.firwin(1000,(20000/fs)*2,window='hamming')
-    highpass = signal.firwin(1000,(20/fs)*2,window='hamming',pass_zero=False)
+    highpass = signal.firwin(1001,(20/fs)*2,window='hamming',pass_zero=False)
 
     #init segment piece
     segment_L = np.zeros((points_number,step))
     segment_R = np.zeros((points_number,step))
 
     for i in range(points_number):
+        L = signal.lfilter(brir[:,i*2],1,audioIn[step*i:step*(i+1)])
+        R = signal.lfilter(brir[:,i*2+1],1,audioIn[step*i:step*(i+1)])
+
+        segment_L[i,:] = L
+        segment_R[i,:] = R
+
+    out_L = segment_L.reshape(-1)
+    out_R = segment_R.reshape(-1)
+    out = np.vstack((out_L,out_R))
+    out = out.T
+
+    return out
+
+def fft(input_signal,hrir_l,hrir_r):   #input_signal =audioIn
+
+    # 读入Xn和Hn并进行fft
+
+    fft_Xn = np.fft.fft(input_signal)
+    fft_Hn_left = np.fft.fft(hrir_l)
+    fft_Hn_right = np.fft.fft(hrir_r)
+
+    # 对Xn和Hn运用overlap & add
+
+
+
 
 
 
@@ -75,5 +102,6 @@ if __name__ =='__main__':
         hrir[:, i * 2] = hrir_l[i]
         hrir[:, i * 2 + 1] = hrir_r[i]
 
-    audio_with_brir()
+    out =audio_with_brir(hrir)
 
+    wavfile.write('OUTnokia.wav',44100,out)
